@@ -116,6 +116,7 @@ type Config struct {
 	Meilisearch           Meilisearch `json:"meilisearch" envPrefix:"MEILISEARCH_"`
 	Scheme                Scheme      `json:"scheme"`
 	TempDir               string      `json:"temp_dir" env:"TEMP_DIR"`
+	TempDirThresholdMB    int         `json:"temp_dir_threshold_mb" env:"TEMP_DIR_THRESHOLD_MB"`
 	BleveDir              string      `json:"bleve_dir" env:"BLEVE_DIR"`
 	DistDir               string      `json:"dist_dir"`
 	Log                   LogConfig   `json:"log" envPrefix:"LOG_"`
@@ -149,9 +150,10 @@ func DefaultConfig(dataDir string) *Config {
 			CertFile:   "",
 			KeyFile:    "",
 		},
-		JwtSecret:      random.String(16),
-		TokenExpiresIn: 48,
-		TempDir:        tempDir,
+		JwtSecret:          random.String(16),
+		TokenExpiresIn:     48,
+		TempDir:            tempDir,
+		TempDirThresholdMB: 300,
 		Database: Database{
 			Type:        "sqlite3",
 			Port:        0,

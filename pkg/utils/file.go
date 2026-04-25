@@ -112,12 +112,23 @@ func CreateNestedFile(path string) (*os.File, error) {
 	return os.Create(path)
 }
 
-// CreateTempFile create temp file from io.ReadCloser, and seek to 0
+// CreateTempFile create temp file from io.ReadCloser, and seek to 0.
+// If the incoming size is below the configured threshold, use the default system temp directory.
 func CreateTempFile(r io.Reader, size int64) (*os.File, error) {
 	if f, ok := r.(*os.File); ok {
 		return f, nil
 	}
-	f, err := os.CreateTemp(conf.Conf.TempDir, "file-*")
+
+	tempDir := conf.Conf.TempDir
+	thresholdMB := conf.Conf.TempDirThresholdMB
+	if thresholdMB <= 0 {
+		thresholdMB = 300
+	}
+	if size > 0 && size < int64(thresholdMB)*1024*1024 {
+		tempDir = os.TempDir()
+	}
+
+	f, err := os.CreateTemp(tempDir, "file-*")
 	if err != nil {
 		return nil, err
 	}
