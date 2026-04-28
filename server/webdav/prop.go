@@ -11,12 +11,16 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/OpenListTeam/OpenList/v4/drivers/meta"
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/db"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/OpenListTeam/OpenList/v4/server/common"
 )
@@ -283,7 +287,57 @@ func allprop(ctx context.Context, ls LockSystem, fi model.Obj, include []xml.Nam
 
 // Patch patches the properties of resource name. The return values are
 // constrained in the same manner as DeadPropsHolder.Patch.
+var lastModifiedProp = xml.Name{Space: "DAV:", Local: "lastmodified"}
+
+func patchLastModified(name string, patches []Proppatch) ([]Propstat, bool, error) {
+	if len(patches) != 1 ||
+		patches[0].Remove ||
+		len(patches[0].Props) != 1 ||
+		patches[0].Props[0].XMLName != lastModifiedProp {
+		return nil, false, nil
+	}
+	storage, actualPath, err := op.GetStorageAndActualPath(name)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if metaStorage, ok := storage.(*meta.FileMeta); !ok {
+		return nil, false, nil
+	} else {
+		if err := updateLastModifiedMeta(actualPath, metaStorage, patches[0]); err != nil {
+			return nil, false, err
+		}
+	}
+	return []Propstat{{
+		Status: http.StatusOK,
+		Props:  []Property{{XMLName: lastModifiedProp}},
+	}}, true, nil
+}
+
+func updateLastModifiedMeta(actualPath string, metaStorage *meta.FileMeta, patch Proppatch) error {
+
+	value := strings.TrimSpace(string(patch.Props[0].InnerXML))
+	if value == "" {
+		return errInvalidProppatch
+	}
+	if secs, err := strconv.ParseInt(value, 10, 64); err != nil {
+		return err
+	} else {
+		return db.CreateOrUpdateFileMeta(&model.FileMeta{
+			Storage: metaStorage.GetStorage().ID,
+			Path:    path.Clean(actualPath),
+			ModTime: secs,
+		})
+	}
+}
+
 func patch(ctx context.Context, ls LockSystem, name string, patches []Proppatch) ([]Propstat, error) {
+	if pstats, handled, err := patchLastModified(name, patches); err != nil {
+		return nil, err
+	} else if handled {
+		return pstats, nil
+	}
+
 	conflict := false
 loop:
 	for _, patch := range patches {
