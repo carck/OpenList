@@ -234,20 +234,24 @@ func Link(ctx context.Context, storage driver.Driver, path string, args model.Li
 	if mode == -1 {
 		mode = storage.(driver.LinkCacheModeResolver).ResolveLinkCacheMode(path)
 	}
+	disableLinkCache := mode&driver.LinkCacheDisable != 0
 	typeKey := args.Type
-	if mode&driver.LinkCacheIP != 0 {
-		typeKey += "/" + args.IP
-	}
-	if mode&driver.LinkCacheUA != 0 {
-		typeKey += "/" + args.Header.Get("User-Agent")
-	}
-	key := Key(storage, path)
-	if ol, exists := Cache.linkCache.GetType(key, typeKey); exists {
-		if ol.link.Expiration != nil ||
-			ol.link.SyncClosers.AcquireReference() || !ol.link.RequireReference {
-			return ol.link, ol.obj, nil
+	if !disableLinkCache {
+		if mode&driver.LinkCacheIP != 0 {
+			typeKey += "/" + args.IP
+		}
+		if mode&driver.LinkCacheUA != 0 {
+			typeKey += "/" + args.Header.Get("User-Agent")
+		}
+		key := Key(storage, path)
+		if ol, exists := Cache.linkCache.GetType(key, typeKey); exists {
+			if ol.link.Expiration != nil ||
+				ol.link.SyncClosers.AcquireReference() || !ol.link.RequireReference {
+				return ol.link, ol.obj, nil
+			}
 		}
 	}
+	key := Key(storage, path)
 
 	fn := func() (*objWithLink, error) {
 		file, err := GetUnwrap(ctx, storage, path)
@@ -263,10 +267,12 @@ func Link(ctx context.Context, storage driver.Driver, path string, args model.Li
 			return nil, errors.Wrapf(err, "failed get link")
 		}
 		ol := &objWithLink{link: link, obj: file}
-		if link.Expiration != nil {
-			Cache.linkCache.SetTypeWithTTL(key, typeKey, ol, *link.Expiration)
-		} else {
-			Cache.linkCache.SetTypeWithExpirable(key, typeKey, ol, &link.SyncClosers)
+		if !disableLinkCache {
+			if link.Expiration != nil {
+				Cache.linkCache.SetTypeWithTTL(key, typeKey, ol, *link.Expiration)
+			} else {
+				Cache.linkCache.SetTypeWithExpirable(key, typeKey, ol, &link.SyncClosers)
+			}
 		}
 		return ol, nil
 	}
@@ -275,7 +281,7 @@ func Link(ctx context.Context, storage driver.Driver, path string, args model.Li
 		if err != nil {
 			return nil, nil, err
 		}
-		if ol.link.SyncClosers.AcquireReference() || !ol.link.RequireReference {
+		if disableLinkCache ||ol.link.SyncClosers.AcquireReference() || !ol.link.RequireReference {
 			return ol.link, ol.obj, nil
 		}
 	}

@@ -32,6 +32,7 @@ type LinkCacheMode int8
 const (
 	LinkCacheAuto LinkCacheMode = -1 // Let the driver decide per-path (use driver.LinkCacheModeResolver)
 	LinkCacheNone LinkCacheMode = 0  // No extra info added to cache key (default)
+	LinkCacheDisable LinkCacheMode = 1 << 2 // Disable link cache for this storage or path
 )
 
 const (
