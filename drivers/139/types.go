@@ -388,3 +388,30 @@ type CreateBatchOprTaskResp struct {
 	} `json:"result"`
 	TaskID string `json:"taskID"`
 }
+
+type SearchFileItem struct {
+	UserId          string `json:"userId"`
+	FileId          string `json:"fileId"`
+	Name            string `json:"name"`
+	NamePath        string `json:"namePath"`
+	IDPath          string `json:"idPath"`
+	DriveID         string `json:"driveId"`
+	Size            int64  `json:"size"`
+	Type            string `json:"type"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt"`
+	Extension       string `json:"extension"`
+	ParentFileId    string `json:"parentFileId"`
+	Category        string `json:"category"`
+	ContentHash     string `json:"contentHash"`
+	ContentHashName string `json:"contentHashName"`
+}
+
+type SearchFileResp struct {
+	BaseResp
+	ResultCode int              `json:"resultCode"`
+	Count      int              `json:"count"`
+	Total      int              `json:"total"`
+	PageAfter  string           `json:"pageAfter"`
+	Rows       []SearchFileItem `json:"rows"`
+}

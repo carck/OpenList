@@ -159,6 +159,12 @@ func (d *Yun139) request(url string, method string, callback base.ReqCallback, r
 		"x-m4c-src":              "10002",
 		"x-SvcType":              svcType,
 		"Inner-Hcy-Router-Https": "1",
+		"X-Yun-Api-Version":    "v1",
+		"X-Yun-App-Channel":    "10000034",
+		"X-Yun-Channel-Source": "10000034",
+		"X-Yun-Client-Info":    "||9|7.14.0|chrome|120.0.0.0|||windows 10||zh-CN|||dW5kZWZpbmVk||",
+		"X-Yun-Module-Type":    "100",
+		"X-Yun-Svc-Type":       "1",
 	})
 
 	var e BaseResp
@@ -661,6 +667,43 @@ func (d *Yun139) personalGetLink(fileId string) (string, error) {
 		}
 	}
 	return jsoniter.Get(res, "data", "url").ToString(), nil
+}
+
+func (d *Yun139) searchFile(ctx context.Context, keyword string, owner string, fullFileIdPath string) (*SearchFileResp, error) {
+	data := base.Json{
+		"conditions": base.Json{
+			"type":    0,
+			"keyword": keyword,
+			"owner":   owner,
+		},
+		"showInfo": base.Json{
+			"returnTotalCountFlag": true,
+			"sortInfos":            []interface{}{},
+			"startNum":             1,
+			"stopNum":              100,
+		},
+	}
+
+	if fullFileIdPath != "" {
+		data["conditions"].(base.Json)["fullFileIdPath"] = fullFileIdPath
+	}
+
+	url := "https://search-njs.yun.139.com/search/SearchFile"
+	var searchResp SearchFileResp
+	_, err := d.request(url, http.MethodPost, func(req *resty.Request) {
+		req.SetBody(data)
+		req.SetContext(ctx)
+	}, &searchResp)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if searchResp.ResultCode != 0 {
+		return nil, fmt.Errorf("search failed: resultCode=%d", searchResp.ResultCode)
+	}
+
+	return &searchResp, nil
 }
 
 func (d *Yun139) getAuthorization() string {

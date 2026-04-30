@@ -29,6 +29,7 @@ type Yun139 struct {
 	Account           string
 	ref               *Yun139
 	PersonalCloudHost string
+	SearchCloudHost   string
 	RootPath          string
 }
 
@@ -75,11 +76,16 @@ func (d *Yun139) Init(ctx context.Context) error {
 		for _, policyItem := range resp.Data.RoutePolicyList {
 			if policyItem.ModName == "personal" {
 				d.PersonalCloudHost = policyItem.HttpsUrl
-				break
+			}
+			if policyItem.ModName == "search" {
+				d.SearchCloudHost = policyItem.HttpsUrl
 			}
 		}
 		if len(d.PersonalCloudHost) == 0 {
 			return fmt.Errorf("PersonalCloudHost is empty")
+		}
+		if len(d.SearchCloudHost) == 0 {
+			return fmt.Errorf("SearchCloudHost is empty")
 		}
 
 		d.cron = cron.NewCron(time.Hour * 12)
@@ -938,6 +944,61 @@ func (d *Yun139) Other(ctx context.Context, args model.OtherArgs) (interface{}, 
 	default:
 		return nil, errs.NotImplement
 	}
+}
+
+func (d *Yun139) Get(ctx context.Context, path string) (model.Obj, error) {
+	switch d.Addition.Type {
+	case MetaPersonalNew:
+		return d.getPersonalNew(ctx, path)
+	default:
+		return nil, errs.NotSupport
+	}
+}
+
+func (d *Yun139) getPersonalNew(ctx context.Context, filePath string) (model.Obj, error) {
+	filename := path.Base(filePath)
+	parentPath := path.Clean(path.Dir(filePath))
+
+	// Use searchFile to find the file
+	searchResp, err := d.searchFile(ctx, filename, d.getAccount(), "")
+	if err != nil || len(searchResp.Rows) == 0 {
+		return nil, errs.NotSupport
+	}
+
+	var item *SearchFileItem
+	for _, row := range searchResp.Rows {
+		if row.Name == filename && (row.NamePath == parentPath || row.NamePath == filePath) {
+			item = &row
+			break
+		}
+	}
+
+	if item == nil {
+		return nil, errs.NotSupport
+	}
+
+	isFolder := item.Type == "2"
+
+	if isFolder {
+		return &model.Object{
+			ID:       item.FileId,
+			Name:     item.Name,
+			Size:     0,
+			Modified: getTime(item.UpdatedAt),
+			Ctime:    getTime(item.CreatedAt),
+			IsFolder: isFolder,
+		}, nil
+	}
+
+	return &model.Object{
+		ID:       item.FileId,
+		Name:     item.Name,
+		Size:     item.Size,
+		Modified: getTime(item.UpdatedAt),
+		Ctime:    getTime(item.CreatedAt),
+		IsFolder: isFolder,
+		HashInfo: utils.NewHashInfo(utils.SHA256, item.ContentHash),
+	}, nil
 }
 
 func (d *Yun139) GetDetails(ctx context.Context) (*model.StorageDetails, error) {
