@@ -38,6 +38,8 @@ const (
 	KEY_HEX_2 = "7150714477323633586746674c337538"                 // 第二层 AES 解密密钥
 )
 
+var tzFix = regexp.MustCompile(`([+-])(\d):`)
+
 // do others that not defined in Driver interface
 func (d *Yun139) isFamily() bool {
 	return d.Type == "family"
@@ -159,12 +161,12 @@ func (d *Yun139) request(url string, method string, callback base.ReqCallback, r
 		"x-m4c-src":              "10002",
 		"x-SvcType":              svcType,
 		"Inner-Hcy-Router-Https": "1",
-		"X-Yun-Api-Version":    "v1",
-		"X-Yun-App-Channel":    "10000034",
-		"X-Yun-Channel-Source": "10000034",
-		"X-Yun-Client-Info":    "||9|7.14.0|chrome|120.0.0.0|||windows 10||zh-CN|||dW5kZWZpbmVk||",
-		"X-Yun-Module-Type":    "100",
-		"X-Yun-Svc-Type":       "1",
+		"X-Yun-Api-Version":      "v1",
+		"X-Yun-App-Channel":      "10000034",
+		"X-Yun-Channel-Source":   "10000034",
+		"X-Yun-Client-Info":      "||9|7.14.0|chrome|120.0.0.0|||windows 10||zh-CN|||dW5kZWZpbmVk||",
+		"X-Yun-Module-Type":      "100",
+		"X-Yun-Svc-Type":         "1",
 	})
 
 	var e BaseResp
@@ -650,23 +652,29 @@ func (d *Yun139) personalGetFiles(fileId string) ([]model.Obj, error) {
 	return files, nil
 }
 
-func (d *Yun139) personalGetLink(fileId string) (string, error) {
+func (d *Yun139) personalGetLink(fileId string) (string, *time.Duration, error) {
+	var dur *time.Duration
 	data := base.Json{
 		"fileId": fileId,
 	}
 	res, err := d.personalPost("/file/getDownloadUrl",
 		data, nil)
 	if err != nil {
-		return "", err
+		return "", dur, err
+	}
+	expiration := jsoniter.Get(res, "data", "expiration").ToString()
+	if t, err := time.Parse(time.RFC3339, tzFix.ReplaceAllString(expiration, "${1}0$2:")); err == nil {
+		duration := time.Until(t)
+		dur = &duration
 	}
 	cdnUrl := jsoniter.Get(res, "data", "cdnUrl").ToString()
 	if cdnUrl != "" {
 		cdnSwitch := jsoniter.Get(res, "data", "cdnSwitch").ToBool()
 		if cdnSwitch {
-			return cdnUrl, nil
+			return cdnUrl, dur, nil
 		}
 	}
-	return jsoniter.Get(res, "data", "url").ToString(), nil
+	return jsoniter.Get(res, "data", "url").ToString(), dur, nil
 }
 
 func (d *Yun139) searchFile(ctx context.Context, keyword string, owner string, fullFileIdPath string) (*SearchFileResp, error) {
