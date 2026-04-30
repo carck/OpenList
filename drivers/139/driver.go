@@ -166,10 +166,10 @@ func (d *Yun139) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 func (d *Yun139) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 	var url string
 	var err error
-	var expiration *time.Duration
+	expiration := time.Minute * 10
 	switch d.Addition.Type {
 	case MetaPersonalNew:
-		url, expiration, err = d.personalGetLink(file.GetID())
+		url, _, err = d.personalGetLink(file.GetID())
 	case MetaPersonal:
 		url, err = d.getLink(file.GetID())
 	case MetaFamily:
@@ -182,7 +182,7 @@ func (d *Yun139) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 	if err != nil {
 		return nil, err
 	}
-	return &model.Link{URL: url, Expiration: expiration}, nil
+	return &model.Link{URL: url, Expiration: &expiration}, nil
 }
 
 func (d *Yun139) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
