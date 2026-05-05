@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/cache"
 	"github.com/OpenListTeam/OpenList/v4/internal/driver"
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
@@ -31,6 +32,7 @@ type Yun139 struct {
 	PersonalCloudHost string
 	SearchCloudHost   string
 	RootPath          string
+	searchCache       *cache.KeyedCache[*model.Object]
 }
 
 func (d *Yun139) Config() driver.Config {
@@ -42,6 +44,7 @@ func (d *Yun139) GetAddition() driver.Additional {
 }
 
 func (d *Yun139) Init(ctx context.Context) error {
+	d.searchCache = cache.NewKeyedCache[*model.Object](time.Minute * 5)
 	if d.ref == nil {
 		if len(d.Authorization) == 0 {
 			if d.Username != "" && d.Password != "" {
@@ -622,6 +625,9 @@ func (d *Yun139) getPartSize(size int64) int64 {
 }
 
 func (d *Yun139) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
+	cacheKey := path.Join(dstDir.GetPath(), stream.GetName())
+	d.searchCache.Delete(cacheKey)
+
 	switch d.Addition.Type {
 	case MetaPersonalNew:
 		var err error
@@ -960,6 +966,10 @@ func (d *Yun139) getPersonalNew(ctx context.Context, filePath string) (model.Obj
 	filename := path.Base(filePath)
 	parentPath := path.Clean(path.Dir(filePath))
 
+	if f, exists := d.searchCache.Get(filePath); exists {
+		return f, nil
+	}
+
 	// Use searchFile to find the file
 	searchResp, err := d.searchFile(ctx, filename, d.getAccount(), "")
 	if err != nil || len(searchResp.Rows) == 0 {
@@ -979,19 +989,19 @@ func (d *Yun139) getPersonalNew(ctx context.Context, filePath string) (model.Obj
 	}
 
 	isFolder := item.Type == "2"
-
+	var obj model.Object
 	if isFolder {
-		return &model.Object{
+		obj = model.Object{
 			ID:       item.FileId,
 			Name:     item.Name,
 			Size:     0,
 			Modified: getTime(item.UpdatedAt),
 			Ctime:    getTime(item.CreatedAt),
 			IsFolder: isFolder,
-		}, nil
+		}
 	}
 
-	return &model.Object{
+	obj = model.Object{
 		ID:       item.FileId,
 		Name:     item.Name,
 		Size:     item.Size,
@@ -999,7 +1009,9 @@ func (d *Yun139) getPersonalNew(ctx context.Context, filePath string) (model.Obj
 		Ctime:    getTime(item.CreatedAt),
 		IsFolder: isFolder,
 		HashInfo: utils.NewHashInfo(utils.SHA256, item.ContentHash),
-	}, nil
+	}
+	d.searchCache.Set(filePath, &obj)
+	return &obj, nil
 }
 
 func (d *Yun139) GetDetails(ctx context.Context) (*model.StorageDetails, error) {
