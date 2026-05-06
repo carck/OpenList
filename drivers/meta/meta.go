@@ -15,7 +15,6 @@ type Addition struct {
 
 var config = driver.Config{
 	Name:          "File Meta",
-	LocalSort:     true,
 	OnlyProxy:     true,
 	NoCache:       true,
 	LinkCacheMode: driver.LinkCacheDisable,

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
@@ -1010,7 +1011,11 @@ func (d *Yun139) getPersonalNew(ctx context.Context, filePath string) (model.Obj
 		IsFolder: isFolder,
 		HashInfo: utils.NewHashInfo(utils.SHA256, item.ContentHash),
 	}
-	d.searchCache.Set(filePath, &obj)
+	if strings.Contains(d.PreCachePaths, filePath) {
+		d.searchCache.SetWithTTL(filePath, &obj, time.Hour * 24 * 365)
+	} else {
+		d.searchCache.Set(filePath, &obj)
+	}
 	return &obj, nil
 }
 
