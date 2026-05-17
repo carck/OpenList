@@ -677,11 +677,20 @@ func (d *Yun139) personalGetLink(fileId string) (string, *time.Duration, error) 
 	return jsoniter.Get(res, "data", "url").ToString(), dur, nil
 }
 
+func Truncate(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen])
+}
+
+
 func (d *Yun139) searchFile(ctx context.Context, keyword string, owner string, fullFileIdPath string) (*SearchFileResp, error) {
 	data := base.Json{
 		"conditions": base.Json{
 			"type":    0,
-			"keyword": keyword,
+			"keyword": Truncate(keyword, 20),
 			"owner":   owner,
 		},
 		"showInfo": base.Json{
